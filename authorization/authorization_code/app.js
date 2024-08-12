@@ -91,20 +91,23 @@ app.get('/callback', function(req, res) {
         var access_token = body.access_token,
             refresh_token = body.refresh_token;
 
-        var options = {
-          url: 'https://api.spotify.com/v1/me/playlists',
-          // url: 'https://api.spotify.com/v1/users/pandubear/playlists',
-          // url: 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI/tracks',
-          headers: { 'Authorization': 'Bearer ' + access_token },
-          json: true
-        };
+        fs.writeFileSync('./access_token.txt', access_token, 'utf-8');
+        console.log('Got access token, written to access_token.txt');
 
-        // use the access token to access the Spotify Web API
-        request.get(options, function(error, response, body) {
-          console.log(body);
-          const text = JSON.stringify(body);
-          fs.writeFileSync('./response.json', text, 'utf-8');
-        });
+        // var options = {
+        //   url: 'https://api.spotify.com/v1/me/playlists',
+        //   // url: 'https://api.spotify.com/v1/users/pandubear/playlists',
+        //   // url: 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI/tracks',
+        //   headers: { 'Authorization': 'Bearer ' + access_token },
+        //   json: true
+        // };
+        //
+        // // use the access token to access the Spotify Web API
+        // request.get(options, function(error, response, body) {
+        //   console.log(body);
+        //   const text = JSON.stringify(body);
+        //   fs.writeFileSync('./response.json', text, 'utf-8');
+        // });
 
         // we can also pass the token to the browser to make requests from there
         res.redirect('/#' +
