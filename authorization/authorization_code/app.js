@@ -13,9 +13,12 @@ var crypto = require('crypto');
 var cors = require('cors');
 var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
+var fs = require('fs');
 
-var client_id = 'yourClientIDGoesHere'; // your clientId
-var client_secret = 'YourSecretIDGoesHere'; // Your secret
+var credentials = require('./credentials.js');
+
+var client_id = credentials.client_id; // your clientId
+var client_secret = credentials.client_secret;// Your secret
 var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
 
 
@@ -40,14 +43,15 @@ app.get('/login', function(req, res) {
   res.cookie(stateKey, state);
 
   // your application requests authorization
-  var scope = 'user-read-private user-read-email';
+  var scope = 'user-read-private user-read-email playlist-read-private';
   res.redirect('https://accounts.spotify.com/authorize?' +
     querystring.stringify({
       response_type: 'code',
       client_id: client_id,
       scope: scope,
       redirect_uri: redirect_uri,
-      state: state
+      state: state,
+      // show_dialog: true,
     }));
 });
 
@@ -88,7 +92,9 @@ app.get('/callback', function(req, res) {
             refresh_token = body.refresh_token;
 
         var options = {
-          url: 'https://api.spotify.com/v1/me',
+          url: 'https://api.spotify.com/v1/me/playlists',
+          // url: 'https://api.spotify.com/v1/users/pandubear/playlists',
+          // url: 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI/tracks',
           headers: { 'Authorization': 'Bearer ' + access_token },
           json: true
         };
@@ -96,6 +102,8 @@ app.get('/callback', function(req, res) {
         // use the access token to access the Spotify Web API
         request.get(options, function(error, response, body) {
           console.log(body);
+          const text = JSON.stringify(body);
+          fs.writeFileSync('./response.json', text, 'utf-8');
         });
 
         // we can also pass the token to the browser to make requests from there
