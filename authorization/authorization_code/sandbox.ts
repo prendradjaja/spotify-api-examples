@@ -1,11 +1,35 @@
 import * as fs from 'fs';
+import { myFetch, myFetchRaw, stringifyArray, unsafeGet, dedupeById } from './util';
+import { FilesystemCache } from './filesystem-cache';
 
 const access_token = fs.readFileSync('./access_token.txt', 'utf8');
 
 async function main() {
-  // processItems();
-  // return;
+  // demoCache();
+  // demoMakeOneRequest();
+  // makeHumanReadablePlaylists();
+  // getAllPlaylists();
+}
 
+async function demoCache() {
+  const cache = new FilesystemCache();
+  let n: { value: number };
+  n = await cache.getOrCreate(
+    'n',
+    () => Promise.resolve({ value: Math.random() })
+  );
+  console.log(n);
+  n = await cache.getOrCreate(
+    'n',
+    () => Promise.resolve({ value: Math.random() })
+  );
+  console.log(n);
+}
+
+// Makes ~10 API calls (with Pandu's library).
+// Saves results in playlists.json.
+async function getAllPlaylists() {
+  console.log('Getting all playlists');
   const firstUrl = 'https://api.spotify.com/v1/me/playlists';
   const options = {
     headers: { 'Authorization': 'Bearer ' + access_token },
@@ -28,19 +52,17 @@ async function main() {
 
 
     items.push(...response.items);
-    fs.writeFileSync('items.json', stringifyArray(items));
-    console.log(`Got ${items.length} of ${expectedTotal} items`);
+    fs.writeFileSync('./data/playlists.json', stringifyArray(items));
+    console.log(`Got ${items.length} of ${expectedTotal} items, saved in data/playlists.json`);
 
     isFirst = false;
   }
 }
 
-function processItems() {
-  let items = JSON.parse(fs.readFileSync('./items.json', 'utf8'));
-  console.log(items.length);
-  items = dedupe(items);
-  console.log(items.length);
-
+function makeHumanReadablePlaylists() {
+  console.log('Turning playlists.json into human readable form');
+  let items = JSON.parse(fs.readFileSync('./data/playlists.json', 'utf8'));
+  items = dedupeById(items);
   let result = '';
   for (let item of items) {
     const unsafeItem = item as any;
@@ -50,69 +72,25 @@ function processItems() {
       `size: ${unsafeItem.tracks.total}`,
     ].join('\t') + '\n';
   }
-  fs.writeFileSync('human-readable-items.txt', result);
-}
-
-function dedupe<T extends { id: string }>(items: T[]): T[] {
-  const result = [];
-  const seen = new Set();
-  for (let item of items) {
-    const id = item.id;
-    if (seen.has(id)) {
-      continue;
-    } else {
-      seen.add(id);
-      result.push(item);
-    }
-  }
-  return result;
-}
-
-function unsafeGet<T>(obj: unknown, key: string): T {
-  return (obj as any)[key];
+  fs.writeFileSync('./data/human-readable-playlists.txt', result);
 }
 
 async function demoMakeOneRequest() {
-  const url = 'https://api.spotify.com/v1/me/playlists';
+  console.log('Making one API call:');
+  // const url = 'https://api.spotify.com/v1/me/playlists';
   // const url = 'https://api.spotify.com/v1/users/pandubear/playlists';
   // const url = 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI/tracks';
+  const url = 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI';
+  console.log(url);
   const options = {
     headers: { 'Authorization': 'Bearer ' + access_token },
   };
 
-  const response: any = await myFetch(url, options);
-
-  console.log(response.items.length);
-  console.log(response.items.slice(0, 5).map((x: any) => x.name));
-}
-
-async function myFetch(url: string, options: RequestInit): Promise<unknown> {
-  const response = await fetch(url, options);
-  const statusCode = response.status; // todo any
-  if (statusCode !== 200) {
-    console.log('Request failed');
-    console.log('- Status code: ' + statusCode);
-    console.log('- statusText: ' + response.statusText);
-    const json = await response.json();
-    console.log('- error.message: ' + json.error.message);
-    process.exit();
-  }
-  return response.json();
-}
-
-function stringifyArray(arr: unknown[]): string {
-  if (arr.length === 0) {
-    return '[]\n';
-  }
-  let result = '[';
-  let isFirst = true;
-  for (const [i, item] of arr.entries()) {
-    const isLast = i === arr.length - 1;
-    const prefix = isFirst ? '' : ' ';
-    const suffix = isLast ? ']\n' : ',\n';
-    result += prefix + JSON.stringify(item) + suffix;
-  }
-  return result;
+  const rawResponse = await myFetchRaw(url, options);
+  console.log(rawResponse.headers.get('Content-Type'));
+  const response = await rawResponse.json();
+  fs.writeFileSync('./data/response.json', JSON.stringify(response));
+  console.log('Response saved in data/response.json');
 }
 
 main();
