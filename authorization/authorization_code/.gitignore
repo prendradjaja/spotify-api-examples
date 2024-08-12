@@ -1,2 +1,4 @@
 credentials.js
 access_token.txt
+*.json
+*.txt
