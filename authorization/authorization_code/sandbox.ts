@@ -2,25 +2,25 @@ import * as fs from 'fs';
 import { myFetch, myFetchRaw, stringifyArray, unsafeGet, dedupeById, myParse } from './my-util';
 import { FilesystemCache } from './filesystem-cache';
 import { SpotifyApi } from '@spotify/web-api-ts-sdk';
+import { SimplifiedPlaylistObject, SimplifiedArtistObject, TrackObject, PlaylistTrackObject, CurrentUserPlaylistsResponse, PlaylistItemsResponse } from './spotify-api-types';
 import * as credentials from './credentials';
+import { z } from 'zod';
 
 const access_token = fs.readFileSync('./access_token.txt', 'utf8');
 
 async function main() {
-  showCache();
+  // showCache();
 
   // demoMakeOneRequest();
   // makeHumanReadablePlaylists();
   // getAllPlaylists();
 
   // demoSDK();
-  // demoCache();
-
 
   // getAllTracksInOnePlaylist('37i9dQZF1EFAW2Wx2Q7Fjt');
   // getAllTracksInEveryPlaylist();
 
-  // demoSearch();
+  demoSearch();
 
   // enrichPlaylistsWithCreationOrder();
 }
@@ -142,21 +142,6 @@ function existsSync(path: string): boolean {
   }
 }
 
-async function demoCache() {
-  const cache = new FilesystemCache();
-  let n: { value: number };
-  n = await cache.getOrCreate(
-    'n',
-    () => Promise.resolve({ value: Math.random() })
-  );
-  console.log(n);
-  n = await cache.getOrCreate(
-    'n',
-    () => Promise.resolve({ value: Math.random() })
-  );
-  console.log(n);
-}
-
 interface CacheStatus {
   fetched: number;
   total: number;
@@ -255,15 +240,15 @@ async function getAllPlaylists() {
     headers: { 'Authorization': 'Bearer ' + access_token },
   };
 
-  let url = firstUrl;
+  let url: string | null = firstUrl;
   let isFirst = true;
   let expectedTotal: number | undefined;
-  const items = [];
+  const items: SimplifiedPlaylistObject[] = [];
   const maxRequests = 20;
   let i = 0;
   while (url && i < maxRequests) {
     i++;
-    const response: any = await myFetch(url, options);
+    const response = CurrentUserPlaylistsResponse.parse(await myFetch(url, options));
     url = response.next;
 
     if (isFirst) {
@@ -281,80 +266,85 @@ async function getAllPlaylists() {
 
 function makeHumanReadablePlaylists() {
   console.log('Turning playlists.json into human readable form');
-  let items = myParse(fs.readFileSync('./data/playlists.json', 'utf8')) as unknown[];
-  items = dedupeById(items as any);
+  let items =
+    z.array(SimplifiedPlaylistObject)
+    .parse(
+      JSON.parse(
+        fs.readFileSync('./data/playlists.json', 'utf8')
+      )
+    ) ;
+  items = dedupeById(items);
   let result = '';
   for (let item of items) {
-    const unsafeItem = item as any;
     result += [
-      `owner: ${unsafeItem.owner.display_name}`,
-      `name: ${unsafeItem.name}`,
-      `size: ${unsafeItem.tracks.total}`,
+      `owner: ${item.owner.display_name}`,
+      `name: ${item.name}`,
+      `size: ${item.tracks.total}`,
     ].join('\t') + '\n';
   }
   fs.writeFileSync('./data/human-readable-playlists.txt', result);
 }
 
-async function demoMakeOneRequest() {
-  console.log('Making one API call:');
-  // const url = 'https://api.spotify.com/v1/me/playlists';
-  // const url = 'https://api.spotify.com/v1/users/pandubear/playlists';
-  // const url = 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI/tracks';
-  const url = 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI';
-  console.log(url);
-  const options = {
-    headers: { 'Authorization': 'Bearer ' + access_token },
-  };
+// async function demoMakeOneRequest() {
+//   console.log('Making one API call:');
+//   // const url = 'https://api.spotify.com/v1/me/playlists';
+//   // const url = 'https://api.spotify.com/v1/users/pandubear/playlists';
+//   // const url = 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI/tracks';
+//   const url = 'https://api.spotify.com/v1/playlists/0hToX38WDA7ATAr2WdhLXI';
+//   console.log(url);
+//   const options = {
+//     headers: { 'Authorization': 'Bearer ' + access_token },
+//   };
+//
+//   const rawResponse = await myFetchRaw(url, options);
+//   console.log(rawResponse.headers.get('Content-Type'));
+//   const response = await rawResponse.json();
+//   fs.writeFileSync('./data/response.json', JSON.stringify(response));
+//   console.log('Response saved in data/response.json');
+// }
 
-  const rawResponse = await myFetchRaw(url, options);
-  console.log(rawResponse.headers.get('Content-Type'));
-  const response = await rawResponse.json();
-  fs.writeFileSync('./data/response.json', JSON.stringify(response));
-  console.log('Response saved in data/response.json');
-}
-
-async function demoSDK() {
-  // I think withAccessToken doesn't actually use the configured caching
-  // strategy (maybe it uses no caching?), so I can't use it
-
-  const api = SpotifyApi.withClientCredentials(
-    credentials.client_id,
-    credentials.client_secret,
-    [],
-    {
-      // cachingStrategy: new FilesystemCache(),
-    }
-  );
-
-  // const api = SpotifyApi.withAccessToken(
-  //   credentials.client_id,
-  //   {
-  //     access_token,
-
-  //     // todo I don't know if I need these values (if I do, are these the right values?)
-  //     // In fact, removing them DOES work (just probably not guaranteed behavior)
-  //     token_type: 'Basic',
-  //     expires_in: 99999,
-  //     refresh_token: '',
-  //   },
-  //   {
-  //     // cachingStrategy: new FilesystemCache(),
-  //   }
-  // );
-
-  let response = await api.playlists.getUsersPlaylists('pandubear', 5);
-  response = await api.playlists.getUsersPlaylists('pandubear', 5);
-  for (let item of response.items) {
-    console.log(item.name);
-  }
-
-  // const items = await api.search("The Beatles", ["artist"]);
-  //
-  // console.table(items.artists.items.map((item) => ({
-  //   name: item.name,
-  //   followers: item.followers.total,
-  //   popularity: item.popularity,
-  // })));
-}
+// async function demoSDK() {
+//   // I think withAccessToken doesn't actually use the configured caching
+//   // strategy (maybe it uses no caching?), so I can't use it
+//
+//   const api = SpotifyApi.withClientCredentials(
+//     credentials.client_id,
+//     credentials.client_secret,
+//     [],
+//     {
+//       // cachingStrategy: new FilesystemCache(),
+//     }
+//   );
+//
+//   // const api = SpotifyApi.withAccessToken(
+//   //   credentials.client_id,
+//   //   {
+//   //     access_token,
+//
+//   //     // todo I don't know if I need these values (if I do, are these the right values?)
+//   //     // In fact, removing them DOES work (just probably not guaranteed behavior)
+//   //     token_type: 'Basic',
+//   //     expires_in: 99999,
+//   //     refresh_token: '',
+//   //   },
+//   //   {
+//   //     // cachingStrategy: new FilesystemCache(),
+//   //   }
+//   // );
+//
+//   let response = await api.playlists.getUsersPlaylists('pandubear', 5);
+//   response = await api.playlists.getUsersPlaylists('pandubear', 5);
+//   for (let item of response.items) {
+//     console.log(item.name);
+//   }
+//
+//   // const items = await api.search("The Beatles", ["artist"]);
+//   //
+//   // console.table(items.artists.items.map((item) => ({
+//   //   name: item.name,
+//   //   followers: item.followers.total,
+//   //   popularity: item.popularity,
+//   // })));
+// }
 
 main();
