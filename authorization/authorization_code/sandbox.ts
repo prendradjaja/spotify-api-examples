@@ -9,7 +9,7 @@ import { z } from 'zod';
 const access_token = fs.readFileSync('./access_token.txt', 'utf8');
 
 async function main() {
-  // showCache();
+  showCache();
 
   // demoHitRateLimit();
   // demoMakeOneRequest();
@@ -19,7 +19,7 @@ async function main() {
   // demoSDK();
 
   // getAllTracksInOnePlaylist('37i9dQZF1EFAW2Wx2Q7Fjt');
-  getAllTracksInEveryPlaylist();
+  // getAllTracksInEveryPlaylist();
 
   // demoSearch();
 
