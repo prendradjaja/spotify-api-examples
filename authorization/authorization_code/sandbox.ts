@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import { myFetch, myFetchRaw, stringifyArray, unsafeGet, dedupeById, myParse } from './my-util';
+import { myFetch, myFetchRaw, stringifyArray, dedupeById } from './my-util';
 import { FilesystemCache } from './filesystem-cache';
 import { SpotifyApi } from '@spotify/web-api-ts-sdk';
 import { SimplifiedPlaylistObject, SimplifiedArtistObject, TrackObject, PlaylistTrackObject, CurrentUserPlaylistsResponse, PlaylistItemsResponse, ErrorResponse } from './spotify-api-types';
@@ -27,7 +27,11 @@ async function main() {
 }
 
 function enrichPlaylistsWithCreationOrder() {
-  let playlistsFromAPI: any[] = JSON.parse(fs.readFileSync('./data/playlists.json', 'utf8'));
+  let playlistsFromAPI =
+    z.array(SimplifiedPlaylistObject)
+    .parse(
+      JSON.parse(fs.readFileSync('./data/playlists.json', 'utf8'))
+    );
   playlistsFromAPI = dedupeById(playlistsFromAPI);
 
   let playlistsByCreationOrder: string[][] =
@@ -36,11 +40,9 @@ function enrichPlaylistsWithCreationOrder() {
     );
 
   const unmatched = [];
-  for (let unsafePlaylist of playlistsFromAPI) {
-    const name: string = unsafePlaylist.name;
-    const id: string = unsafePlaylist.id;
-    const owner: string = unsafePlaylist.owner.display_name;
-    const playlist = { id, name, owner };
+  for (let playlist of playlistsFromAPI) {
+    const { id, name } = playlist;
+    const owner = playlist.owner.display_name;
 
     const match = playlistsByCreationOrder.find(other => other[0] === name && other[1] === owner);
     if (!match) {
@@ -50,23 +52,36 @@ function enrichPlaylistsWithCreationOrder() {
     }
   }
 
+  let a = 0, b = 0;
   for (let each of playlistsByCreationOrder) {
-    console.log(JSON.stringify(each));
+    a++;
+    // console.log(JSON.stringify(each));
   }
-  console.log('---');
+  // console.log('---');
   for (let each of unmatched) {
-    console.log(JSON.stringify(each));
+    b++;
+    // console.log(JSON.stringify(each));
   }
+  console.log(a, b);
 }
 
 function demoSearch() {
-  let playlists = myParse(fs.readFileSync('./data/playlists.json', 'utf8')) as unknown[];
-  playlists = dedupeById(playlists as any[]);
+  let playlists =
+    z.array(SimplifiedPlaylistObject)
+    .parse(
+      JSON.parse(fs.readFileSync('./data/playlists.json', 'utf8'))
+    );
+  playlists = dedupeById(playlists);
 
-  let hydratedPlaylists: Record<string, any[]> = {};
+  let hydratedPlaylists: Record<string, PlaylistTrackObject[]> = {};
   for (let playlist of playlists) {
-    const id = unsafeGet<string>(playlist, 'id');
-    hydratedPlaylists[id] = myParse(fs.readFileSync(getCachedPlaylistPath(id), 'utf8')) as any[];
+    const id = playlist.id;
+    const hydratedPlaylist: PlaylistTrackObject[] =
+      z.array(PlaylistTrackObject)
+      .parse(
+        JSON.parse(fs.readFileSync(getCachedPlaylistPath(id), 'utf8'))
+      );
+    hydratedPlaylists[id] = hydratedPlaylist;
   }
 
   const index = new PlaylistsByTrack();
@@ -74,8 +89,8 @@ function demoSearch() {
     const playlist = hydratedPlaylists[playlistId];
     for (let item of playlist) {
       const track = item.track;
-      if (track.name) {
-        const name = (track.name as string).toLowerCase();
+      if (track.type === 'track') {
+        const name = track.name.toLowerCase();
         index.getItem(name).push(playlistId);
       }
     }
@@ -152,22 +167,33 @@ interface CacheStatus {
 }
 
 function showCache(): void {
-  let playlists = myParse(fs.readFileSync('./data/playlists.json', 'utf8')) as unknown[];
-  playlists = dedupeById(playlists as any[]);
+  let playlists =
+    z.array(SimplifiedPlaylistObject)
+    .parse(
+      JSON.parse(
+        fs.readFileSync('./data/playlists.json', 'utf8')
+      )
+    );
+  playlists = dedupeById(playlists);
 
   const statuses: CacheStatus[] = [];
 
   for (let playlist of playlists) {
-    const unsafePlaylist = playlist as any;
-    const id = unsafePlaylist.id as string;
-    const total = unsafePlaylist.tracks.total as number;
-    let cachedPlaylist: unknown[];
+    const id = playlist.id;
+    const total = playlist.tracks.total;
+    let cachedPlaylist: PlaylistTrackObject[];
     try {
-      cachedPlaylist = JSON.parse(fs.readFileSync(getCachedPlaylistPath(id), 'utf8'));
+      cachedPlaylist =
+        z.array(PlaylistTrackObject)
+        .parse(
+          JSON.parse(
+            fs.readFileSync(getCachedPlaylistPath(id), 'utf8')
+          )
+        );
     } catch {
       cachedPlaylist = [];
     }
-    const fetched = unsafeGet<number>(cachedPlaylist, 'length');
+    const fetched = cachedPlaylist.length;
     statuses.push({
       total,
       fetched,
@@ -213,7 +239,7 @@ async function getAllTracksInOnePlaylist(playlistId: string) {
   let url: string | null = firstUrl;
   let isFirst = true;
   let expectedTotal: number | undefined;
-  const items = [];
+  const items: PlaylistTrackObject[] = [];
   const maxRequests = 5;
   let i = 0;
   while (url && i < maxRequests) {
@@ -276,7 +302,7 @@ function makeHumanReadablePlaylists() {
       JSON.parse(
         fs.readFileSync('./data/playlists.json', 'utf8')
       )
-    ) ;
+    );
   items = dedupeById(items);
   let result = '';
   for (let item of items) {
