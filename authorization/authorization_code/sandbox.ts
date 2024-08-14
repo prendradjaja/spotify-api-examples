@@ -20,7 +20,42 @@ async function main() {
   // getAllTracksInOnePlaylist('37i9dQZF1EFAW2Wx2Q7Fjt');
   // getAllTracksInEveryPlaylist();
 
-  demoSearch();
+  // demoSearch();
+
+  // enrichPlaylistsWithCreationOrder();
+}
+
+function enrichPlaylistsWithCreationOrder() {
+  let playlistsFromAPI: any[] = JSON.parse(fs.readFileSync('./data/playlists.json', 'utf8'));
+  playlistsFromAPI = dedupeById(playlistsFromAPI);
+
+  let playlistsByCreationOrder: string[][] =
+    JSON.parse(
+      fs.readFileSync('./data/playlist-creation-order.json', 'utf8')
+    );
+
+  const unmatched = [];
+  for (let unsafePlaylist of playlistsFromAPI) {
+    const name: string = unsafePlaylist.name;
+    const id: string = unsafePlaylist.id;
+    const owner: string = unsafePlaylist.owner.display_name;
+    const playlist = { id, name, owner };
+
+    const match = playlistsByCreationOrder.find(other => other[0] === name && other[1] === owner);
+    if (!match) {
+      unmatched.push(playlist);
+    } else {
+      match.push(id);
+    }
+  }
+
+  for (let each of playlistsByCreationOrder) {
+    console.log(JSON.stringify(each));
+  }
+  console.log('---');
+  for (let each of unmatched) {
+    console.log(JSON.stringify(each));
+  }
 }
 
 function demoSearch() {
