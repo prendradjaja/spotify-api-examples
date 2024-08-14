@@ -19,7 +19,7 @@ export const SimplifiedPlaylistObject = z.object({
 export type SimplifiedPlaylistObject = z.infer<typeof SimplifiedPlaylistObject>;
 
 export const SimplifiedArtistObject = z.object({
-  id: z.string(),
+  id: z.string().nullable(), // I think if a artist ID is null that means the artist is unavailable (maybe deleted or region-locked)
   name: z.string(),
 });
 export type SimplifiedArtistObject = z.infer<typeof SimplifiedArtistObject>;
@@ -27,18 +27,31 @@ export type SimplifiedArtistObject = z.infer<typeof SimplifiedArtistObject>;
 export const TrackObject = z.object({
   type: z.literal('track'),
   artists: z.array(SimplifiedArtistObject),
-  id: z.string(),
+  id: z.string().nullable(), // I think if a track ID is null that means the track or artist is unavailable (maybe deleted or region-locked)
   name: z.string(),
 });
 export type TrackObject = z.infer<typeof TrackObject>;
 
+export const EpisodeObject = z.object({
+  type: z.literal('episode'),
+});
+export type EpisodeObject = z.infer<typeof EpisodeObject>;
+
 export const PlaylistTrackObject = z.object({
   track: z.discriminatedUnion('type', [
     TrackObject,
-    // EpisodeObject, // not implemented
+    EpisodeObject,
   ]),
 });
 export type PlaylistTrackObject = z.infer<typeof PlaylistTrackObject>;
+
+// ERROR RESPONSE ------------------------------------------------------------
+
+export const ErrorResponse = z.object({
+  status: z.number().int(),
+  message: z.string(),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 // ENDPOINTS -----------------------------------------------------------------
 

@@ -17,6 +17,7 @@ export async function myFetch(url: string, options: RequestInit): Promise<unknow
   return response.json();
 }
 
+// todo DRY
 export async function myFetchRaw(url: string, options: RequestInit): Promise<Response> {
   const response = await fetch(url, options);
   const statusCode = response.status; // todo any
@@ -24,6 +25,7 @@ export async function myFetchRaw(url: string, options: RequestInit): Promise<Res
     console.log('Request failed');
     console.log('- Status code: ' + statusCode);
     console.log('- statusText: ' + response.statusText);
+    console.log('- Retry-After header: ' + response.headers.get('Retry-After'));
     const json = await response.json();
     console.log('- error.message: ' + json.error.message);
     process.exit();

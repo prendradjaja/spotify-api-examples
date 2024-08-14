@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { myFetch, myFetchRaw, stringifyArray, unsafeGet, dedupeById, myParse } from './my-util';
 import { FilesystemCache } from './filesystem-cache';
 import { SpotifyApi } from '@spotify/web-api-ts-sdk';
-import { SimplifiedPlaylistObject, SimplifiedArtistObject, TrackObject, PlaylistTrackObject, CurrentUserPlaylistsResponse, PlaylistItemsResponse } from './spotify-api-types';
+import { SimplifiedPlaylistObject, SimplifiedArtistObject, TrackObject, PlaylistTrackObject, CurrentUserPlaylistsResponse, PlaylistItemsResponse, ErrorResponse } from './spotify-api-types';
 import * as credentials from './credentials';
 import { z } from 'zod';
 
@@ -11,6 +11,7 @@ const access_token = fs.readFileSync('./access_token.txt', 'utf8');
 async function main() {
   // showCache();
 
+  // demoHitRateLimit();
   // demoMakeOneRequest();
   // makeHumanReadablePlaylists();
   // getAllPlaylists();
@@ -18,9 +19,9 @@ async function main() {
   // demoSDK();
 
   // getAllTracksInOnePlaylist('37i9dQZF1EFAW2Wx2Q7Fjt');
-  // getAllTracksInEveryPlaylist();
+  getAllTracksInEveryPlaylist();
 
-  demoSearch();
+  // demoSearch();
 
   // enrichPlaylistsWithCreationOrder();
 }
@@ -98,8 +99,12 @@ class PlaylistsByTrack {
 }
 
 async function getAllTracksInEveryPlaylist() {
-  let playlists = myParse(fs.readFileSync('./data/playlists.json', 'utf8')) as unknown[];
-  playlists = dedupeById(playlists as any[]);
+  let playlists =
+    z.array(SimplifiedPlaylistObject)
+    .parse(
+      JSON.parse(fs.readFileSync('./data/playlists.json', 'utf8'))
+    );
+  playlists = dedupeById(playlists);
 
   const chunkSize = 5;
   const waitBetweenChunks = 1000; // in milliseconds
@@ -109,14 +114,13 @@ async function getAllTracksInEveryPlaylist() {
     let allSkipped = true;
     for (let playlist of chunk) {
       const idx = i + j;
-      const id = unsafeGet<string>(playlist, 'id');
-      if (existsSync(getCachedPlaylistPath(id))) {
+      if (existsSync(getCachedPlaylistPath(playlist.id))) {
         // todo Should check if cached playlist is complete; if not, we still want to fetch
         console.log(idx, 'Skipped: Cache exists already');
       } else {
         allSkipped = false;
         console.log(idx, 'Fetching');
-        getAllTracksInOnePlaylist(id).then(() =>
+        getAllTracksInOnePlaylist(playlist.id).then(() =>
           console.log(idx, 'Done fetching')
         );
       }
@@ -199,8 +203,6 @@ function getCachedPlaylistPath(playlistId: string): string {
 }
 
 async function getAllTracksInOnePlaylist(playlistId: string) {
-  // console.log('Getting all tracks from one playlist');
-
   const firstUrl = `https://api.spotify.com/v1/playlists/${playlistId}/tracks`;
   const filePath = getCachedPlaylistPath(playlistId);
 
@@ -208,7 +210,7 @@ async function getAllTracksInOnePlaylist(playlistId: string) {
     headers: { 'Authorization': 'Bearer ' + access_token },
   };
 
-  let url = firstUrl;
+  let url: string | null = firstUrl;
   let isFirst = true;
   let expectedTotal: number | undefined;
   const items = [];
@@ -216,16 +218,19 @@ async function getAllTracksInOnePlaylist(playlistId: string) {
   let i = 0;
   while (url && i < maxRequests) {
     i++;
-    const response: any = await myFetch(url, options);
+    // console.log(url);
+    const rawResponse = await myFetch(url, options);
+    // fs.writeFileSync('raw-response.json', JSON.stringify(rawResponse));
+    // console.log('Wrote to raw-response.json');
+    const response = PlaylistItemsResponse.parse(rawResponse);
     url = response.next;
 
     if (isFirst) {
-      expectedTotal = unsafeGet<number>(response, 'total');
+      expectedTotal = response.total;
     }
 
     items.push(...response.items);
     fs.writeFileSync(filePath, stringifyArray(items));
-    // console.log(`Got ${items.length} of ${expectedTotal} items, saved in ${filePath}`);
 
     isFirst = false;
   }
@@ -252,9 +257,8 @@ async function getAllPlaylists() {
     url = response.next;
 
     if (isFirst) {
-      expectedTotal = unsafeGet<number>(response, 'total');
+      expectedTotal = response.total;
     }
-
 
     items.push(...response.items);
     fs.writeFileSync('./data/playlists.json', stringifyArray(items));
@@ -302,6 +306,16 @@ function makeHumanReadablePlaylists() {
 //   fs.writeFileSync('./data/response.json', JSON.stringify(response));
 //   console.log('Response saved in data/response.json');
 // }
+
+async function demoHitRateLimit() {
+  console.log('Making one API call repeatedly to hit the rate limit:');
+  const url = 'https://api.spotify.com/v1/me';
+  const options = {
+    headers: { 'Authorization': 'Bearer ' + access_token },
+  };
+
+  const promises = Array.from({ length: 200 }, () => myFetchRaw(url, options));
+}
 
 // async function demoSDK() {
 //   // I think withAccessToken doesn't actually use the configured caching
